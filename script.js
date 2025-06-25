@@ -6,11 +6,15 @@ const filterBtns = document.querySelectorAll(".filter-btn");
 const addTaskModal = document.getElementById("add-task-modal");
 const taskDetailModal = document.getElementById("task-detail-modal");
 const closeBtns = document.querySelectorAll(".close-btn");
+const liveClock = document.getElementById("live-clock");
+const dueDateInput = document.getElementById("task-due-date");
 
 // Stats elements
 const totalTasksElement = document.getElementById("total-tasks");
 const pendingTasksElement = document.getElementById("pending-tasks");
 const completedTasksElement = document.getElementById("completed-tasks");
+const progressFill = document.getElementById("progress-fill");
+const progressText = document.getElementById("progress-text");
 
 // Task detail elements
 const detailTitle = document.getElementById("detail-title");
@@ -21,6 +25,10 @@ const detailStatus = document.getElementById("detail-status");
 const completeBtn = document.getElementById("complete-btn");
 const deleteBtn = document.getElementById("delete-btn");
 
+// Chart element
+const taskChartCanvas = document.getElementById("task-chart");
+let taskChart;
+
 // State
 let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
 let currentFilter = "all";
@@ -28,9 +36,86 @@ let selectedTaskId = null;
 
 // Initialize the app
 function init() {
+  // Set minimum date to today
+  const today = new Date().toISOString().split("T")[0];
+  dueDateInput.min = today;
+
+  // Initialize live clock
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // Initialize chart
+  initChart();
+
   renderTasks();
   updateStats();
   setupEventListeners();
+}
+
+// Set up live clock
+function updateClock() {
+  const now = new Date();
+  const options = {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  };
+  liveClock.textContent = now.toLocaleDateString("en-US", options);
+}
+
+// Initialize Chart.js pie chart
+function initChart() {
+  const ctx = taskChartCanvas.getContext("2d");
+  taskChart = new Chart(ctx, {
+    type: "pie",
+    data: {
+      labels: ["Completed", "Pending"],
+      datasets: [
+        {
+          data: [0, 0],
+          backgroundColor: ["#28a745", "#ffc107"],
+          borderWidth: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: function (context) {
+              const label = context.label || "";
+              const value = context.raw || 0;
+              const total = context.dataset.data.reduce((a, b) => a + b, 0);
+              const percentage = Math.round((value / total) * 100);
+              return `${label}: ${value} (${percentage}%)`;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+// Update chart data
+function updateChart() {
+  const completed = tasks.filter((task) => task.completed).length;
+  const pending = tasks.length - completed;
+
+  taskChart.data.datasets[0].data = [completed, pending];
+  taskChart.update();
 }
 
 // Set up event listeners
@@ -133,15 +218,26 @@ function renderTasks() {
     const dueDate = task.dueDate
       ? new Date(task.dueDate).toLocaleDateString()
       : "No due date";
+    const priorityIcon =
+      task.priority === "high"
+        ? "fa-exclamation-triangle"
+        : task.priority === "medium"
+        ? "fa-exclamation-circle"
+        : "fa-arrow-down";
 
     taskElement.innerHTML = `
             <h3 class="task-title">${task.title}</h3>
             <p>${task.description || "No description"}</p>
             <div class="task-meta">
-                <span class="priority-tag priority-${task.priority}">${
-      task.priority
-    }</span>
-                <span>Due: ${dueDate}</span>
+                <span class="priority-tag priority-${task.priority}">
+                    <i class="fas ${priorityIcon}"></i> ${task.priority}
+                </span>
+                <span><i class="fas fa-calendar"></i> Due: ${dueDate}</span>
+                ${
+                  task.completed
+                    ? '<span><i class="fas fa-check"></i> Completed</span>'
+                    : ""
+                }
             </div>
         `;
 
@@ -170,7 +266,9 @@ function showTaskDetails(taskId) {
   const statusText = task.completed ? "Completed" : "Pending";
   detailStatus.textContent = `Status: ${statusText}`;
 
-  completeBtn.textContent = task.completed ? "Mark Pending" : "Mark Complete";
+  completeBtn.innerHTML = task.completed
+    ? '<i class="fas fa-undo"></i> Mark Pending'
+    : '<i class="fas fa-check"></i> Mark Complete';
 
   taskDetailModal.style.display = "flex";
 }
@@ -196,7 +294,7 @@ function deleteSelectedTask() {
   taskDetailModal.style.display = "none";
 }
 
-// Update statistics
+// Update statistics and progress
 function updateStats() {
   const total = tasks.length;
   const completed = tasks.filter((t) => t.completed).length;
@@ -205,6 +303,15 @@ function updateStats() {
   totalTasksElement.textContent = total;
   completedTasksElement.textContent = completed;
   pendingTasksElement.textContent = pending;
+
+  // Update progress bar
+  const completionPercentage =
+    total > 0 ? Math.round((completed / total) * 100) : 0;
+  progressFill.style.width = `${completionPercentage}%`;
+  progressText.textContent = `${completionPercentage}% Complete`;
+
+  // Update chart
+  updateChart();
 }
 
 // Save tasks to localStorage
