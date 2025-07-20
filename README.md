@@ -2,8 +2,6 @@
 
 A responsive, interactive task management web application built with pure HTML, CSS, and JavaScript. Features localStorage persistence for data retention between sessions.
 
-![Task Manager Screenshot](./screenshot.png) *(Add screenshot if available)*
-
 ## Features
 
 ✅ **No Backend Required**  
